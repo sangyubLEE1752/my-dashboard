@@ -3,6 +3,14 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+# 🌟 배포 사이트 다크 테마 강제 적용 (배경 검은색)
+st.set_page_config(
+    page_title="자산 관리 대시보드",
+    page_icon="🍩",
+    layout="wide",
+    initial_sidebar_state="expanded"
+
+
 st.set_page_config(page_title="통합 자산 관리 대시보드", layout="wide")
 
 # ====================================================
