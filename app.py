@@ -9,7 +9,7 @@ st.set_page_config(
     page_icon="🍩",
     layout="wide",
     initial_sidebar_state="expanded"
-
+)
 
 st.set_page_config(page_title="통합 자산 관리 대시보드", layout="wide")
 
