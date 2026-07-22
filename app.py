@@ -416,7 +416,7 @@ with top_tabs[0]:
         df_assets['부동산'] = data_clean.iloc[:, 7].apply(clean_and_convert)
         df_assets['Gold'] = data_clean.iloc[:, 8].apply(clean_and_convert)
         df_assets['통장(현금성)'] = data_clean.iloc[:, 9].apply(clean_and_convert) + data_clean.iloc[:, 10].apply(clean_and_convert) + data_clean.iloc[:, 11].apply(clean_and_convert)
-        df_assets['적금/예금'] = data_clean.iloc[:, 12:16].applymap(clean_and_convert).sum(axis=1)
+        df_assets['적금/예금'] = data_clean.iloc[:, 12:16].map(clean_and_convert).sum(axis=1)
         
         stock_coin_pension = df_assets['총자산'] - (df_assets['부동산'] + df_assets['Gold'] + df_assets['통장(현금성)'] + df_assets['적금/예금'])
         df_assets['주식/코인/연금'] = stock_coin_pension.apply(lambda x: max(x, 0))
