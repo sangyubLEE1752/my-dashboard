@@ -3,14 +3,6 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-# 🌟 배포 사이트 다크 테마 강제 적용 (배경 검은색)
-st.set_page_config(
-    page_title="자산 관리 대시보드",
-    page_icon="🍩",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
 st.set_page_config(page_title="통합 자산 관리 대시보드", layout="wide")
 
 # ====================================================
@@ -45,7 +37,7 @@ URL_PENSION      = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRI1ukc6E3nr
 # ====================================================
 # 🛠 2. 핵심 공통 처리 함수 정의
 # ====================================================
-@st.cache_data(ttl=0)
+@st.cache_data(ttl=60)
 def load_pure_data(url):
     try:
         df = pd.read_csv(url, header=None)
@@ -61,7 +53,6 @@ def clean_and_convert(value):
     try: return float(value)
     except: return 0
 
-# 🌟 날짜를 YYYY/MM (예: 2026/07) 형태로 무조건 변환해주는 함수
 def format_date_str(val):
     val_str = str(val).strip()
     if not val_str or val_str.lower() == 'nan':
@@ -95,7 +86,6 @@ def display_summary(df, is_total=False):
     ratio_color = "#FF5252" if val_ratio > 0 else ("#448AFF" if val_ratio < 0 else "#FFFFFF")
     ratio_sign = "+" if val_ratio > 0 else ""
 
-    # 🌟 [위쪽] 전체 요약: 가로로 넓은 프리미엄 통짜 대형 카드 1개형
     if is_total:
         st.markdown(f"""
             <div style='
@@ -127,8 +117,6 @@ def display_summary(df, is_total=False):
                 </div>
             </div>
         """, unsafe_allow_html=True)
-
-    # 🌟 [아래쪽] 개별 계좌 요약: 기존 4개 분할 미니멀 카드형
     else:
         col1, col2, col3, col4 = st.columns(4)
         card_base = """
@@ -169,7 +157,6 @@ def display_summary(df, is_total=False):
             
         st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
 
-
 def display_chart(df):
     if df.empty: return
     chart_df = df.copy()
@@ -177,8 +164,6 @@ def display_chart(df):
         chart_df[col] = chart_df[col].apply(clean_and_convert)
     
     chart_df['순수익'] = chart_df['현재잔고'] - chart_df['투자원금']
-    
-    # 차트 X축용으로 시간순(오래된 순 -> 최신순) 정렬
     chart_df['temp_dt'] = pd.to_datetime(chart_df['일자'], format='%Y/%m', errors='coerce')
     chart_df = chart_df.sort_values(by='temp_dt').reset_index(drop=True)
         
@@ -209,10 +194,9 @@ def display_chart(df):
         hovermode="x unified",
         yaxis=dict(tickformat=",.0f", ticksuffix="원"),
         yaxis2=dict(ticksuffix="%"),
-        xaxis=dict(type='category')  # 👈 X축을 카테고리(YYYY/MM)로 고정
+        xaxis=dict(type='category')
     )
     st.plotly_chart(fig, use_container_width=True)
-
 
 def parse_account(df, start_idx):
     if df is None: return pd.DataFrame(columns=['일자', '투자원금', '현재잔고', '수익금액', '수익률', '월수익'])
@@ -231,7 +215,6 @@ def parse_account(df, start_idx):
     else:
         return pd.DataFrame(columns=['일자', '투자원금', '현재잔고', '수익금액', '수익률', '월수익'])
         
-    # 🌟 일자를 YYYY/MM 형태로 변환
     sub_df['일자'] = sub_df['일자'].apply(format_date_str)
     sub_df = sub_df[pd.notna(sub_df['일자']) & (sub_df['일자'] != '') & (sub_df['일자'].str.lower() != 'nan')].copy()
     
@@ -242,7 +225,6 @@ def parse_account(df, start_idx):
         
     return sub_df
 
-# 연금 전용 파싱 함수 (IRP의 '입금' 열 및 흥국생명의 2열 구조 대응)
 def parse_pension_account(df, start_idx, is_irp=False, is_hunguk=False):
     if df is None: return pd.DataFrame(columns=['일자', '투자원금', '현재잔고', '수익금액', '수익률', '월수익'])
     
@@ -258,7 +240,6 @@ def parse_pension_account(df, start_idx, is_irp=False, is_hunguk=False):
 
     sub_df.columns = ['일자', '투자원금', '현재잔고', '수익금액', '수익률', '월수익']
 
-    # 🌟 일자를 YYYY/MM 형태로 변환
     sub_df['일자'] = sub_df['일자'].apply(format_date_str)
     sub_df = sub_df[pd.notna(sub_df['일자']) & (sub_df['일자'] != '') & (sub_df['일자'].str.lower() != 'nan')].copy()
     
@@ -273,16 +254,14 @@ def render_account_tab(sub_df, title):
     display_summary(sub_df, is_total=False)
     display_chart(sub_df)
     
-    # 🎨 수익금액, 수익률 컬러 스타일링 함수 정의
     def color_profit_loss(val):
         num_val = clean_and_convert(val)
         if num_val > 0:
-            return 'color: #FF5252; font-weight: bold;'  # 수익: 붉은색
+            return 'color: #FF5252; font-weight: bold;'
         elif num_val < 0:
-            return 'color: #448AFF; font-weight: bold;'  # 손실: 파란색
-        return 'color: #8E9297;'                         # 0 또는 기타
+            return 'color: #448AFF; font-weight: bold;'
+        return 'color: #8E9297;'
 
-    # 표로 보여줄 데이터 복사
     df_disp = sub_df.copy()
     
     for col in ['투자원금', '현재잔고', '수익금액', '수익률', '월수익']:
@@ -291,7 +270,6 @@ def render_account_tab(sub_df, title):
             
     df_disp = df_disp.set_index('일자')
     
-    # 숫자 포맷 및 스타일 적용
     styled_tab_df = df_disp.style\
         .map(color_profit_loss, subset=['수익금액', '수익률'])\
         .format({
@@ -404,7 +382,6 @@ with top_tabs[0]:
         valid_mask = pd.notna(data_total_asset.iloc[:, 0]) & (data_total_asset.iloc[:, 0].astype(str).str.strip() != '') & (data_total_asset.iloc[:, 0].astype(str).str.lower() != 'nan')
         data_clean = data_total_asset[valid_mask].reset_index(drop=True)
         
-        # 🌟 최신 데이터(맨 위 행)
         df_asset_last = data_clean.iloc[0]
         has_prev_row = len(data_clean) >= 2
         df_asset_prev = data_clean.iloc[1] if has_prev_row else df_asset_last
@@ -423,7 +400,7 @@ with top_tabs[0]:
         
         df_assets['부동산'] = data_clean.iloc[:, 7].apply(clean_and_convert)
         df_assets['Gold'] = data_clean.iloc[:, 8].apply(clean_and_convert)
-        df_assets['통장(현금성)'] = data_clean.iloc[:, 9].apply(clean_and_convert) + data_clean.iloc[:, 10].apply(clean_and_convert) + data_clean.iloc[:, 11].apply(clean_and_convert)
+        df_assets['통장(현금성)'] = data_clean.iloc[:, 9].map(clean_and_convert) + data_clean.iloc[:, 10].apply(clean_and_convert) + data_clean.iloc[:, 11].apply(clean_and_convert)
         df_assets['적금/예금'] = data_clean.iloc[:, 12:16].map(clean_and_convert).sum(axis=1)
         
         stock_coin_pension = df_assets['총자산'] - (df_assets['부동산'] + df_assets['Gold'] + df_assets['통장(현금성)'] + df_assets['적금/예금'])
@@ -502,9 +479,6 @@ with top_tabs[0]:
         elif rate < 0: return f"<span style='color: #448AFF; font-size: 12px; font-weight: bold;'>{rate}%</span>"
         return f"<span style='color: #8E9297; font-size: 12px; font-weight: bold;'>0.0%</span>"
 
-    # ====================================================
-    # 🌟 [1번째 줄] 총자산 현황 + 자산 비중 + 총자산 누적 막대 추이 그래프
-    # ====================================================
     r1_col1, r1_col2, r1_col3 = st.columns([0.7, 1.0, 1.8])
 
     with r1_col1:
@@ -577,22 +551,21 @@ with top_tabs[0]:
                 title=dict(
                     text=f"📈 월별 자산 구성 & 증감액 추이 {badge_html}", 
                     font=dict(size=17, color="#FFFFFF"),
-                    x=0, y=0.98  # 👈 제목 위치 고정
+                    x=0, y=0.98
                 ),
-                height=370,  # 👈 높이를 370으로 늘려 아래 공간을 시원하게 채움!
-                margin=dict(l=10, r=10, t=65, b=25),  # 👈 상단 여백(t=65)을 넉넉히 주어 겹침 방지!
+                height=370,
+                margin=dict(l=10, r=10, t=65, b=25),
                 hovermode="x unified",
                 legend=dict(
                     orientation="h", 
                     yanchor="bottom", 
-                    y=1.03,  # 👈 범례 위치를 위로 살짝 올려 제목/뱃지와 분리
+                    y=1.03, 
                     xanchor="right", 
                     x=1.0
                 ),
                 xaxis=dict(type='category')
             )
             
-            # 왼쪽 Y축 (0부터 자연스럽게 누적 막대가 보이도록 범위를 지정하지 않음)
             fig_line.update_yaxes(
                 tickformat=",.0f",
                 ticksuffix="원",
@@ -609,9 +582,6 @@ with top_tabs[0]:
 
     st.markdown("<hr style='border: 0; height: 1px; background: #2A2D32; margin: 25px 0;'>", unsafe_allow_html=True)
 
-    # ====================================================
-    # 🌟 [2번째 줄] 재테크 투자원금 + 현재금액 + 수익 현황 3카드
-    # ====================================================
     r2_col1, r2_col2, r2_col3 = st.columns(3)
 
     with r2_col1:
@@ -718,15 +688,10 @@ with top_tabs[0]:
 
     st.markdown("<hr style='border: 0; height: 1px; background: #2A2D32; margin: 25px 0;'>", unsafe_allow_html=True)
 
-# ====================================================
-    # 🌟 [3번째 줄] 월별 자산 현황 & Event 기록 상세 표
-    # ====================================================
     if not df_assets.empty:
         st.markdown("<div style='font-size: 19px; font-weight: bold; color: #FFFFFF; margin-bottom: 15px;'><span style='color: #00E676;'>●</span> 월별 자산 현황 & Event 기록</div>", unsafe_allow_html=True)
         
-        # 🌟 표 표시용 데이터는 최신 월이 맨 위로 오도록 내림차순(ascending=False) 정렬!
         df_assets_table = df_assets.sort_values(by='일자', ascending=False).reset_index(drop=True)
-        
         df_assets_disp = df_assets_table[['일자', '총자산', '증감액', '증감율', 'Event', '부동산', 'Gold', '통장(현금성)', '적금/예금', '주식/코인/연금']].copy().set_index('일자')
         
         def color_total_diff(val):
@@ -750,6 +715,17 @@ with top_tabs[0]:
 # ----------------------------------------------------
 with top_tabs[1]:
     if account_dict:
+        # 🌟 [기능 3] 연금 포함/제외 선택 라디오 버튼
+        pension_exclude_list = ["개인연금", "IRP", "퇴직연금", "흥국생명"]
+        
+        pension_mode = st.radio(
+            "손익 보기 옵션:", 
+            ["🛡️ 연금 제외 (투자/단기 계좌만)", "💼 연금 포함 (전체 계좌)"], 
+            horizontal=True
+        )
+        
+        st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
+
         all_dates = []
         for acc_df in account_dict.values():
             all_dates.extend(acc_df['일자'].dropna().tolist())
@@ -757,16 +733,21 @@ with top_tabs[1]:
         unique_dates = [d for d in list(dict.fromkeys(all_dates)) if pd.notna(d) and str(d).strip() != '' and str(d).lower() != 'nan']
         df_monthly_all = pd.DataFrame({'일자': unique_dates})
         
-        for name, acc_df in account_dict.items():
+        # 선택 모드에 따른 계산 대상 계좌 필터링
+        if "연금 제외" in pension_mode:
+            acc_cols = [name for name in account_dict.keys() if name not in pension_exclude_list]
+        else:
+            acc_cols = list(account_dict.keys())
+        
+        for name in acc_cols:
+            acc_df = account_dict[name]
             temp_df = acc_df[['일자', '월수익']].copy()
             temp_df['월수익'] = temp_df['월수익'].apply(clean_and_convert)
             temp_df.rename(columns={'월수익': name}, inplace=True)
             df_monthly_all = pd.merge(df_monthly_all, temp_df, on='일자', how='left')
             
-        acc_cols = list(account_dict.keys())
         df_monthly_all[acc_cols] = df_monthly_all[acc_cols].fillna(0)
         
-        # 🌟 날짜형 변환 후 내림차순(ascending=False) 정렬 -> 최신 월이 맨 위로!
         df_monthly_all['temp_dt'] = pd.to_datetime(df_monthly_all['일자'], format='%Y/%m', errors='coerce')
         df_monthly_all = df_monthly_all.dropna(subset=['temp_dt']).sort_values(by='temp_dt', ascending=False).drop(columns=['temp_dt']).reset_index(drop=True)
         
@@ -775,7 +756,6 @@ with top_tabs[1]:
         cols_order = ['일자', '월 총손익'] + acc_cols
         df_monthly_all = df_monthly_all[cols_order]
         
-        # 📈 차트는 왼쪽에서 오른쪽으로 시간 흐름대로 보여주기 위해 오래된 순(ascending=True) 재정렬
         chart_m_df = df_monthly_all.iloc[::-1].reset_index(drop=True)
         
         fig_m = go.Figure()
@@ -799,7 +779,7 @@ with top_tabs[1]:
         
         st.plotly_chart(fig_m, use_container_width=True)
         
-        st.markdown("<h4 style='margin-top:20px; margin-bottom:10px;'>📄 계좌별 월간 손익 상세 표</h4>", unsafe_allow_html=True)
+        st.markdown(f"<h4 style='margin-top:20px; margin-bottom:10px;'>📄 계좌별 월간 손익 상세 표 ({'연금 제외' if '연금 제외' in pension_mode else '연금 포함'})</h4>", unsafe_allow_html=True)
         
         def color_total_profit(val):
             if isinstance(val, (int, float)):
