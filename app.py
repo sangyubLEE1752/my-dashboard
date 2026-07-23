@@ -715,7 +715,6 @@ with top_tabs[0]:
 # ----------------------------------------------------
 with top_tabs[1]:
     if account_dict:
-        # 🌟 [기능 3] 연금 포함/제외 선택 라디오 버튼
         pension_exclude_list = ["개인연금", "IRP", "퇴직연금", "흥국생명"]
         
         pension_mode = st.radio(
@@ -733,7 +732,6 @@ with top_tabs[1]:
         unique_dates = [d for d in list(dict.fromkeys(all_dates)) if pd.notna(d) and str(d).strip() != '' and str(d).lower() != 'nan']
         df_monthly_all = pd.DataFrame({'일자': unique_dates})
         
-        # 선택 모드에 따른 계산 대상 계좌 필터링
         if "연금 제외" in pension_mode:
             acc_cols = [name for name in account_dict.keys() if name not in pension_exclude_list]
         else:
@@ -755,7 +753,52 @@ with top_tabs[1]:
         
         cols_order = ['일자', '월 총손익'] + acc_cols
         df_monthly_all = df_monthly_all[cols_order]
-        
+
+        # 🌟 전체 누적 손익, 올해 누적 손익(YTD), 월평균 손익 계산 및 3카드 표시
+        if not df_monthly_all.empty:
+            total_accum_profit = df_monthly_all['월 총손익'].sum()
+            latest_year_str = str(df_monthly_all['일자'].iloc[0])[:4]
+            df_ytd = df_monthly_all[df_monthly_all['일자'].str.startswith(latest_year_str)]
+            ytd_profit = df_ytd['월 총손익'].sum()
+            avg_monthly_profit = df_monthly_all['월 총손익'].mean()
+            
+            tot_color = "#FF5252" if total_accum_profit > 0 else ("#448AFF" if total_accum_profit < 0 else "#FFFFFF")
+            tot_sign = "+" if total_accum_profit > 0 else ""
+            
+            ytd_color = "#FF5252" if ytd_profit > 0 else ("#448AFF" if ytd_profit < 0 else "#FFFFFF")
+            ytd_sign = "+" if ytd_profit > 0 else ""
+            
+            avg_color = "#FF5252" if avg_monthly_profit > 0 else ("#448AFF" if avg_monthly_profit < 0 else "#FFFFFF")
+            avg_sign = "+" if avg_monthly_profit > 0 else ""
+
+            # 요약 카드 3개 분할 배치
+            y_col1, y_col2, y_col3 = st.columns(3)
+            card_base_ytd = "background: #16181A; border: 1px solid #2A2D32; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px;"
+            
+            with y_col1:
+                st.markdown(f"""
+                    <div style='{card_base_ytd} border-left: 4px solid {tot_color};'>
+                        <div style='font-size: 13px; color: #9E9E9E; margin-bottom: 4px; font-weight: 500;'>🏆 전체 누적 손익 (기록 전체)</div>
+                        <div style='font-size: 22px; font-weight: bold; color: {tot_color};'>{tot_sign}{int(total_accum_profit):,}원</div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+            with y_col2:
+                st.markdown(f"""
+                    <div style='{card_base_ytd} border-left: 4px solid {ytd_color};'>
+                        <div style='font-size: 13px; color: #9E9E9E; margin-bottom: 4px; font-weight: 500;'>📅 올해 누적 손익 ({latest_year_str}년 YTD)</div>
+                        <div style='font-size: 22px; font-weight: bold; color: {ytd_color};'>{ytd_sign}{int(ytd_profit):,}원</div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+            with y_col3:
+                st.markdown(f"""
+                    <div style='{card_base_ytd} border-left: 4px solid {avg_color};'>
+                        <div style='font-size: 13px; color: #9E9E9E; margin-bottom: 4px; font-weight: 500;'>📈 전체 월평균 손익</div>
+                        <div style='font-size: 22px; font-weight: bold; color: {avg_color};'>{avg_sign}{int(avg_monthly_profit):,}원</div>
+                    </div>
+                """, unsafe_allow_html=True)
+
         chart_m_df = df_monthly_all.iloc[::-1].reset_index(drop=True)
         
         fig_m = go.Figure()
