@@ -328,6 +328,9 @@ if data_overseas is not None:
     if num_cols > 13:
         ovs_accs.append(parse_account(data_overseas, 13))
         account_dict["떨사오팔"] = ovs_accs[2]
+    if num_cols > 18:
+        ovs_accs.append(parse_account(data_overseas, 18))
+        account_dict["V3"] = ovs_accs[3]
     df_ovs_total = calculate_total_df(ovs_accs)
 else:
     df_ovs_total = None
@@ -386,10 +389,14 @@ with top_tabs[0]:
         has_prev_row = len(data_clean) >= 2
         df_asset_prev = data_clean.iloc[1] if has_prev_row else df_asset_last
         
-        val_real_estate = clean_and_convert(df_asset_last.iloc[7])
-        val_gold        = clean_and_convert(df_asset_last.iloc[8])
-        val_cash        = clean_and_convert(df_asset_last.iloc[9]) + clean_and_convert(df_asset_last.iloc[10]) + clean_and_convert(df_asset_last.iloc[11])
-        val_savings     = sum(clean_and_convert(df_asset_last.iloc[i]) for i in range(12, 16))
+        # 🌟 실제 시트 열 구조 반영: H=7(Gold), I~K=8~10(현금성), L~O=11~14(적금/예금/청약)
+        val_gold = clean_and_convert(df_asset_last.iloc[7]) if len(df_asset_last) > 7 else 0
+        val_cash = (clean_and_convert(df_asset_last.iloc[8]) + 
+                    clean_and_convert(df_asset_last.iloc[9]) + 
+                    clean_and_convert(df_asset_last.iloc[10])) if len(df_asset_last) > 10 else 0
+        
+        # 8월 국민은행(13번) 빈칸은 자동 0원 처리
+        val_savings = sum(clean_and_convert(df_asset_last.iloc[i]) for i in range(11, min(15, len(df_asset_last))))
         
         df_assets = pd.DataFrame()
         df_assets['일자'] = data_clean.iloc[:, 0].apply(format_date_str)
@@ -398,18 +405,56 @@ with top_tabs[0]:
         df_assets['증감율'] = data_clean.iloc[:, 5].apply(clean_and_convert)
         df_assets['Event'] = data_clean.iloc[:, 6].fillna('-').astype(str).str.strip()
         
-        df_assets['부동산'] = data_clean.iloc[:, 7].apply(clean_and_convert)
-        df_assets['Gold'] = data_clean.iloc[:, 8].apply(clean_and_convert)
-        df_assets['통장(현금성)'] = data_clean.iloc[:, 9].map(clean_and_convert) + data_clean.iloc[:, 10].apply(clean_and_convert) + data_clean.iloc[:, 11].apply(clean_and_convert)
-        df_assets['적금/예금'] = data_clean.iloc[:, 12:16].map(clean_and_convert).sum(axis=1)
+        df_assets['Gold'] = data_clean.iloc[:, 7].apply(clean_and_convert) if data_clean.shape[1] > 7 else 0
+        df_assets['통장(현금성)'] = (data_clean.iloc[:, 8].map(clean_and_convert) + 
+                                  data_clean.iloc[:, 9].map(clean_and_convert) + 
+                                  data_clean.iloc[:, 10].map(clean_and_convert)) if data_clean.shape[1] > 10 else 0
         
-        stock_coin_pension = df_assets['총자산'] - (df_assets['부동산'] + df_assets['Gold'] + df_assets['통장(현금성)'] + df_assets['적금/예금'])
-        df_assets['주식/코인/연금'] = stock_coin_pension.apply(lambda x: max(x, 0))
+        # L~O열(11:15) 전체 합산
+        if data_clean.shape[1] > 11:
+            max_col = min(15, data_clean.shape[1])
+            savings_sub = data_clean.iloc[:, 11:max_col].copy()
+            df_assets['적금/예금'] = savings_sub.map(clean_and_convert).sum(axis=1)
+        else:
+            df_assets['적금/예금'] = 0
+
+        # 🌟 [국내주식, 해외주식, 코인, 연금] 개별 분리 매핑
+        # 1) 국내주식
+        if df_dom_total is not None and not df_dom_total.empty:
+            temp_dom = df_dom_total[['일자', '현재잔고']].rename(columns={'현재잔고': '국내주식'})
+            df_assets = pd.merge(df_assets, temp_dom, on='일자', how='left')
+            df_assets['국내주식'] = df_assets['국내주식'].fillna(0).apply(clean_and_convert)
+        else:
+            df_assets['국내주식'] = 0
+
+        # 2) 해외주식
+        if df_ovs_total is not None and not df_ovs_total.empty:
+            temp_ovs = df_ovs_total[['일자', '현재잔고']].rename(columns={'현재잔고': '해외주식'})
+            df_assets = pd.merge(df_assets, temp_ovs, on='일자', how='left')
+            df_assets['해외주식'] = df_assets['해외주식'].fillna(0).apply(clean_and_convert)
+        else:
+            df_assets['해외주식'] = 0
+
+        # 3) 코인
+        if df_coin_total is not None and not df_coin_total.empty:
+            temp_coin = df_coin_total[['일자', '현재잔고']].rename(columns={'현재잔고': '코인'})
+            df_assets = pd.merge(df_assets, temp_coin, on='일자', how='left')
+            df_assets['코인'] = df_assets['코인'].fillna(0).apply(clean_and_convert)
+        else:
+            df_assets['코인'] = 0
+
+        # 4) 연금
+        if df_pension_total is not None and not df_pension_total.empty:
+            temp_pen = df_pension_total[['일자', '현재잔고']].rename(columns={'현재잔고': '연금'})
+            df_assets = pd.merge(df_assets, temp_pen, on='일자', how='left')
+            df_assets['연금'] = df_assets['연금'].fillna(0).apply(clean_and_convert)
+        else:
+            df_assets['연금'] = 0
 
         df_assets['temp_dt'] = pd.to_datetime(df_assets['일자'], format='%Y/%m', errors='coerce')
         df_assets = df_assets.dropna(subset=['temp_dt']).sort_values(by='temp_dt').drop(columns=['temp_dt']).reset_index(drop=True)
     else:
-        val_real_estate, val_gold, val_cash, val_savings = 0, 0, 0, 0
+        val_gold, val_cash, val_savings = 0, 0, 0
         df_assets = pd.DataFrame()
 
     def get_latest_acc_vals(df, indices):
@@ -425,7 +470,7 @@ with top_tabs[0]:
     dom_inv2, dom_bal2 = get_latest_acc_vals(data_dom2, [3, 8])
     dom_inv, dom_bal = dom_inv1 + dom_inv2, dom_bal1 + dom_bal2
 
-    ovs_inv, ovs_bal = get_latest_acc_vals(data_overseas, [3, 8, 13])
+    ovs_inv, ovs_bal = get_latest_acc_vals(data_overseas, [3, 8, 13, 18])
     coin_inv, coin_bal = get_latest_acc_vals(data_coin, [3, 8])
     
     pen_inv, pen_bal = 0, 0
@@ -444,7 +489,10 @@ with top_tabs[0]:
     total_tech_profit = total_tech_bal - total_tech_inv
 
     val_stock_coin, val_pension_bal = dom_bal + ovs_bal + coin_bal, pen_bal
-    val_total_assets = val_real_estate + val_stock_coin + val_pension_bal + val_savings + val_cash + val_gold
+    val_total_assets = val_stock_coin + val_pension_bal + val_savings + val_cash + val_gold
+    
+    # 🌟 연금 제외 총자산 (순수 투자 + 예적금 + 현금성 + Gold)
+    val_total_assets_no_pension = val_stock_coin + val_savings + val_cash + val_gold
 
     prev_total_assets = clean_and_convert(df_asset_prev.iloc[3]) if has_prev_row else val_total_assets
     diff_amount = val_total_assets - prev_total_assets
@@ -479,21 +527,29 @@ with top_tabs[0]:
         elif rate < 0: return f"<span style='color: #448AFF; font-size: 12px; font-weight: bold;'>{rate}%</span>"
         return f"<span style='color: #8E9297; font-size: 12px; font-weight: bold;'>0.0%</span>"
 
+    # ====================================================
+    # 🌟 [1번째 줄] 총자산 현황(연금제외 추가) + 자산 비중(세분화) + 총자산 누적 막대 추이 그래프
+    # ====================================================
     r1_col1, r1_col2, r1_col3 = st.columns([0.7, 1.0, 1.8])
 
     with r1_col1:
         st.markdown(f"""
             <div style='{card_style}'>
-                <div style='font-size: 19px; font-weight: bold; color: #FFFFFF; margin-bottom: 10px;'>
+                <div style='font-size: 19px; font-weight: bold; color: #FFFFFF; margin-bottom: 8px;'>
                     <span style='color: #00E676;'>●</span> 총자산 현황
                 </div>
                 <div style='color: #00E676; font-size: 12px; font-weight: bold;'>총자산</div>
-                <div style='font-size: 22px; font-weight: 800; color: #FFFFFF; margin-bottom: 10px; letter-spacing: -0.5px;'>
+                <div style='font-size: 22px; font-weight: 800; color: #FFFFFF; margin-bottom: 6px; letter-spacing: -0.5px;'>
                     {int(val_total_assets):,}원
                 </div>
+                <div style='background: #20242B; border-radius: 8px; padding: 6px 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;'>
+                    <span style='color: #4DD0E1; font-size: 12px; font-weight: 600;'>🛡️ 연금제외</span>
+                    <span style='font-size: 16px; font-weight: bold; color: #4DD0E1;'>{int(val_total_assets_no_pension):,}원</span>
+                </div>
                 <div style='border-top: 1px solid #2A2D32; padding-top: 6px;'>
-                    <div style='{row_style}'><span style='{label_style}'>부동산</span><span style='{val_style}'>{int(val_real_estate):,}원</span></div>
-                    <div style='{row_style}'><span style='{label_style}'>주식/코인</span><span style='{val_style}'>{int(val_stock_coin):,}원</span></div>
+                    <div style='{row_style}'><span style='{label_style}'>국내주식</span><span style='{val_style}'>{int(dom_bal):,}원</span></div>
+                    <div style='{row_style}'><span style='{label_style}'>해외주식</span><span style='{val_style}'>{int(ovs_bal):,}원</span></div>
+                    <div style='{row_style}'><span style='{label_style}'>코인</span><span style='{val_style}'>{int(coin_bal):,}원</span></div>
                     <div style='{row_style}'><span style='{label_style}'>연금</span><span style='{val_style}'>{int(val_pension_bal):,}원</span></div>
                     <div style='{row_style}'><span style='{label_style}'>예적금</span><span style='{val_style}'>{int(val_savings):,}원</span></div>
                     <div style='{row_style}'><span style='{label_style}'>현금성</span><span style='{val_style}'>{int(val_cash):,}원</span></div>
@@ -504,13 +560,12 @@ with top_tabs[0]:
 
     with r1_col2:
         if not df_assets.empty:
-            latest_row = df_assets.iloc[-1]
-            labels = ['부동산', 'Gold', '통장(현금성)', '적금/예금', '주식/코인/연금']
-            values = [latest_row['부동산'], latest_row['Gold'], latest_row['통장(현금성)'], latest_row['적금/예금'], latest_row['주식/코인/연금']]
+            labels = ['Gold', '통장(현금성)', '적금/예금', '국내주식', '해외주식', '코인', '연금']
+            values = [val_gold, val_cash, val_savings, dom_bal, ovs_bal, coin_bal, val_pension_bal]
             
             fig_pie = go.Figure(data=[go.Pie(
                 labels=labels, values=values, hole=.45,
-                marker=dict(colors=['#2E7D32', '#FBC02D', '#1E88E5', '#8E24AA', '#E65100']),
+                marker=dict(colors=['#FBC02D', '#1E88E5', '#8E24AA', '#7986CB', '#FF8A80', '#FFB74D', '#81C784']),
                 textinfo='percent+label',
                 hovertemplate='<b>%{label}</b>: %{value:,.0f}원 (%{percent})'
             )])
@@ -524,12 +579,15 @@ with top_tabs[0]:
         if not df_assets.empty:
             fig_line = make_subplots(specs=[[{"secondary_y": True}]])
 
+            # 🌟 [요청 반영] 아래에서부터 쌓이는 순서: 연금 -> 골드 -> 통장(현금성) -> 적금/예금 -> 코인 -> 해외주식 -> 국내주식
             asset_layers = [
-                ('부동산', '#2E7D32'),
+                ('연금', '#81C784'),
                 ('Gold', '#FBC02D'),
                 ('통장(현금성)', '#1E88E5'),
                 ('적금/예금', '#8E24AA'),
-                ('주식/코인/연금', '#E65100')
+                ('코인', '#FFB74D'),
+                ('해외주식', '#FF8A80'),
+                ('국내주식', '#7986CB')
             ]
             
             for col_name, col_color in asset_layers:
@@ -582,6 +640,9 @@ with top_tabs[0]:
 
     st.markdown("<hr style='border: 0; height: 1px; background: #2A2D32; margin: 25px 0;'>", unsafe_allow_html=True)
 
+    # ====================================================
+    # 🌟 [2번째 줄] 재테크 투자원금 + 현재금액 + 수익 현황 3카드
+    # ====================================================
     r2_col1, r2_col2, r2_col3 = st.columns(3)
 
     with r2_col1:
@@ -688,11 +749,16 @@ with top_tabs[0]:
 
     st.markdown("<hr style='border: 0; height: 1px; background: #2A2D32; margin: 25px 0;'>", unsafe_allow_html=True)
 
+    # ====================================================
+    # 🌟 [3번째 줄] 월별 자산 현황 & Event 기록 상세 표
+    # ====================================================
     if not df_assets.empty:
         st.markdown("<div style='font-size: 19px; font-weight: bold; color: #FFFFFF; margin-bottom: 15px;'><span style='color: #00E676;'>●</span> 월별 자산 현황 & Event 기록</div>", unsafe_allow_html=True)
         
         df_assets_table = df_assets.sort_values(by='일자', ascending=False).reset_index(drop=True)
-        df_assets_disp = df_assets_table[['일자', '총자산', '증감액', '증감율', 'Event', '부동산', 'Gold', '통장(현금성)', '적금/예금', '주식/코인/연금']].copy().set_index('일자')
+        
+        # 🌟 동일한 순서로 표 컬럼 정렬 (연금 -> Gold -> 통장(현금성) -> 적금/예금 -> 코인 -> 해외주식 -> 국내주식)
+        df_assets_disp = df_assets_table[['일자', '총자산', '증감액', '증감율', 'Event', '연금', 'Gold', '통장(현금성)', '적금/예금', '코인', '해외주식', '국내주식']].copy().set_index('일자')
         
         def color_total_diff(val):
             if isinstance(val, (int, float)):
@@ -704,8 +770,8 @@ with top_tabs[0]:
             .map(color_total_diff, subset=['증감액', '증감율'])\
             .format({
                 '총자산': "{:,.0f}원", '증감액': "{:,.0f}원", '증감율': "{:.2f}%",
-                '부동산': "{:,.0f}원", 'Gold': "{:,.0f}원", '통장(현금성)': "{:,.0f}원",
-                '적금/예금': "{:,.0f}원", '주식/코인/연금': "{:,.0f}원"
+                '연금': "{:,.0f}원", 'Gold': "{:,.0f}원", '통장(현금성)': "{:,.0f}원", '적금/예금': "{:,.0f}원",
+                '코인': "{:,.0f}원", '해외주식': "{:,.0f}원", '국내주식': "{:,.0f}원"
             })
             
         st.dataframe(styled_assets, use_container_width=True, height=400)
@@ -754,7 +820,6 @@ with top_tabs[1]:
         cols_order = ['일자', '월 총손익'] + acc_cols
         df_monthly_all = df_monthly_all[cols_order]
 
-        # 🌟 전체 누적 손익, 올해 누적 손익(YTD), 월평균 손익 계산 및 3카드 표시
         if not df_monthly_all.empty:
             total_accum_profit = df_monthly_all['월 총손익'].sum()
             latest_year_str = str(df_monthly_all['일자'].iloc[0])[:4]
@@ -771,7 +836,6 @@ with top_tabs[1]:
             avg_color = "#FF5252" if avg_monthly_profit > 0 else ("#448AFF" if avg_monthly_profit < 0 else "#FFFFFF")
             avg_sign = "+" if avg_monthly_profit > 0 else ""
 
-            # 요약 카드 3개 분할 배치
             y_col1, y_col2, y_col3 = st.columns(3)
             card_base_ytd = "background: #16181A; border: 1px solid #2A2D32; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px;"
             
@@ -868,6 +932,7 @@ with top_tabs[3]:
         tab_names = ["토스증권"]
         if len(ovs_accs) > 1: tab_names.append("SOXL Grid")
         if len(ovs_accs) > 2: tab_names.append("떨사오팔")
+        if len(ovs_accs) > 3: tab_names.append("V3")
         sub_tabs = st.tabs(tab_names)
         for i, tab in enumerate(sub_tabs):
             with tab: render_account_tab(ovs_accs[i], "")
