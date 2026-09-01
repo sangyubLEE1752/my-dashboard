@@ -160,35 +160,63 @@ def display_summary(df, is_total=False):
 def display_chart(df):
     if df.empty: return
     chart_df = df.copy()
+    
+    # 데이터 정제
     for col in ['투자원금', '현재잔고', '수익금액', '수익률']:
         chart_df[col] = chart_df[col].apply(clean_and_convert)
     
-    chart_df['순수익'] = chart_df['현재잔고'] - chart_df['투자원금']
+    # 날짜 정렬
     chart_df['temp_dt'] = pd.to_datetime(chart_df['일자'], format='%Y/%m', errors='coerce')
     chart_df = chart_df.sort_values(by='temp_dt').reset_index(drop=True)
         
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     
+    # 💡 핵심 로직: 막대의 총 높이는 무조건 '현재잔고'가 되도록 두 조각으로 쪼갭니다.
+    base_y = []
+    top_y = []
+    
+    for _, row in chart_df.iterrows():
+        bal = row['현재잔고']
+        profit_abs = abs(row['수익금액'])
+        
+        # 하단 녹색 기둥 높이 (잔고에서 손익 절댓값만큼 뺀 나머지)
+        green_part = max(0, bal - profit_abs)
+        # 상단 색칠 기둥 높이 (손익 절댓값)
+        color_part = min(bal, profit_abs)
+        
+        base_y.append(green_part)
+        top_y.append(color_part)
+        
+    # 1. 하단 베이스 막대 (녹색)
     fig.add_trace(go.Bar(
-        x=chart_df['일자'], y=chart_df['투자원금'], name="투자원금",
-        marker_color='#FFA726', opacity=0.85,
-        hovertemplate='<b>투자원금</b>: %{y:,.0f}원'
+        x=chart_df['일자'], y=base_y, name="자산 베이스",
+        marker_color='#26A69A', opacity=0.85, 
+        # 마우스를 올렸을 때는 조각난 숫자가 아닌 진짜 원금/잔고를 보여줍니다.
+        customdata=chart_df[['투자원금', '현재잔고']].values,
+        hovertemplate='<b>💵 투자원금</b>: %{customdata[0]:,.0f}원<br><b>✨ 현재잔고</b>: %{customdata[1]:,.0f}원<extra></extra>'
     ), secondary_y=False)
     
+    # 2. 상단 손익 막대 (수익은 빨강, 손실은 파랑)
+    profit_colors = ['#FF5252' if val > 0 else '#448AFF' if val < 0 else '#8E9297' for val in chart_df['수익금액']]
+    
     fig.add_trace(go.Bar(
-        x=chart_df['일자'], y=chart_df['순수익'], name="평가손익",
-        marker_color='#FF5252', opacity=0.85,
-        hovertemplate='<b>평가손익</b>: %{y:+,.0f}원'
+        x=chart_df['일자'], y=top_y, name="평가손익",
+        marker_color=profit_colors, opacity=0.9,
+        # 마우스를 올렸을 때는 부호(+/-)가 포함된 진짜 수익금액을 보여줍니다.
+        customdata=chart_df['수익금액'], 
+        hovertemplate='<b>평가손익</b>: %{customdata:+,.0f}원<extra></extra>'
     ), secondary_y=False)
     
+    # 3. 수익률 (보조축 꺾은선)
     fig.add_trace(go.Scatter(
         x=chart_df['일자'], y=chart_df['수익률'], name="수익률(%)", 
         line=dict(color='#BA55D3', width=3),
-        hovertemplate='<b>수익률</b>: %{y:.2f}%'
+        hovertemplate='<b>수익률</b>: %{y:.2f}%<extra></extra>'
     ), secondary_y=True)
     
+    # 레이아웃 업데이트
     fig.update_layout(
-        barmode='stack',
+        barmode='stack', # 두 조각을 쌓으면 총 높이가 딱 '현재잔고'가 완성됩니다!
         height=340, margin=dict(l=0, r=0, t=20, b=0),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
         hovermode="x unified",
@@ -197,6 +225,8 @@ def display_chart(df):
         xaxis=dict(type='category')
     )
     st.plotly_chart(fig, use_container_width=True)
+
+
 
 def parse_account(df, start_idx):
     if df is None: return pd.DataFrame(columns=['일자', '투자원금', '현재잔고', '수익금액', '수익률', '월수익'])
@@ -270,8 +300,9 @@ def render_account_tab(sub_df, title):
             
     df_disp = df_disp.set_index('일자')
     
+    # 💡 수정된 부분: subset 리스트 마지막에 '월수익'을 추가했습니다!
     styled_tab_df = df_disp.style\
-        .map(color_profit_loss, subset=['수익금액', '수익률'])\
+        .map(color_profit_loss, subset=['수익금액', '수익률', '월수익'])\
         .format({
             '투자원금': "{:,.0f}원", 
             '현재잔고': "{:,.0f}원", 
