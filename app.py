@@ -6,23 +6,23 @@ from plotly.subplots import make_subplots
 st.set_page_config(page_title="통합 자산 관리 대시보드", layout="wide")
 
 # ====================================================
-# 🎨 Custom CSS: 상단 메인 탭 글씨 및 높이 확대
+# 🎨 Custom CSS: 상단 메인 탭 글씨 및 높이 확대 (클라우드 호환)
 # ====================================================
 st.markdown("""
     <style>
-        /* 탭 버튼 전체 크기 및 폰트 설정 */
-        button[data-baseweb="tab"],
-        div[data-baseweb="tab-list"] button {
+        /* 1. 탭 버튼 본체 크기 및 패딩 */
+        .stTabs [data-baseweb="tab-list"] button {
             font-size: 22px !important;
             font-weight: bold !important;
-            padding: 14px 24px !important;
+            padding: 14px 20px !important;
         }
         
-        /* 탭 내부 텍스트(p, span, div) 폰트 크기 강제 확대 */
-        button[data-baseweb="tab"] p,
-        button[data-baseweb="tab"] span,
-        button[data-baseweb="tab"] div,
-        div[data-baseweb="tab-list"] button * {
+        /* 2. 클라우드 최신 버전 마크다운 컨테이너 및 텍스트 강제 확대 */
+        .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p,
+        .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"],
+        .stTabs [data-baseweb="tab-list"] button p,
+        .stTabs [data-baseweb="tab-list"] button div,
+        .stTabs [data-baseweb="tab-list"] button span {
             font-size: 22px !important;
             font-weight: bold !important;
         }
