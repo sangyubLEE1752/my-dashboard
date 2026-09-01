@@ -10,15 +10,20 @@ st.set_page_config(page_title="통합 자산 관리 대시보드", layout="wide"
 # ====================================================
 st.markdown("""
     <style>
-        /* 상단 메인 탭 버튼 크기 및 글씨 키우기 */
-        button[data-baseweb="tab"] {
-            font-size: 18px !important;
+        /* 탭 버튼 전체 크기 및 폰트 설정 */
+        button[data-baseweb="tab"],
+        div[data-baseweb="tab-list"] button {
+            font-size: 22px !important;
             font-weight: bold !important;
-            padding: 12px 20px !important;
+            padding: 14px 24px !important;
         }
-        /* 탭 내부 p 태그 폰트 크기 확대 */
-        button[data-baseweb="tab"] p {
-            font-size: 18px !important;
+        
+        /* 탭 내부 텍스트(p, span, div) 폰트 크기 강제 확대 */
+        button[data-baseweb="tab"] p,
+        button[data-baseweb="tab"] span,
+        button[data-baseweb="tab"] div,
+        div[data-baseweb="tab-list"] button * {
+            font-size: 22px !important;
             font-weight: bold !important;
         }
     </style>
