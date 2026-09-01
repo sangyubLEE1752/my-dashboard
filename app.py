@@ -6,25 +6,37 @@ from plotly.subplots import make_subplots
 st.set_page_config(page_title="통합 자산 관리 대시보드", layout="wide")
 
 # ====================================================
-# 🎨 Custom CSS: 상단 메인 탭 글씨 및 높이 확대 (클라우드 호환)
+# 🎨 Custom CSS: 상단 메인 탭 글씨 및 높이 확대
 # ====================================================
 st.markdown("""
     <style>
-        /* 1. 탭 버튼 본체 크기 및 패딩 */
-        .stTabs [data-baseweb="tab-list"] button {
-            font-size: 22px !important;
-            font-weight: bold !important;
-            padding: 14px 20px !important;
+        /* 1. 탭 바 전체 컨테이너 높이 및 갭 조절 */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 12px !important;
+            padding-bottom: 8px !important;
         }
-        
-        /* 2. 클라우드 최신 버전 마크다운 컨테이너 및 텍스트 강제 확대 */
-        .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p,
-        .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"],
-        .stTabs [data-baseweb="tab-list"] button p,
-        .stTabs [data-baseweb="tab-list"] button div,
-        .stTabs [data-baseweb="tab-list"] button span {
-            font-size: 22px !important;
-            font-weight: bold !important;
+
+        /* 2. 탭 버튼 본체 크기 및 패딩 */
+        .stTabs [data-baseweb="tab"],
+        button[data-baseweb="tab"] {
+            font-size: 24px !important;
+            font-weight: 800 !important;
+            padding: 12px 20px !important;
+            height: auto !important;
+        }
+
+        /* 3. 탭 내부 모든 글자/이모지/태그 강제 확대 */
+        .stTabs [data-baseweb="tab"] *,
+        button[data-baseweb="tab"] *,
+        .stTabs [data-baseweb="tab-list"] button * {
+            font-size: 24px !important;
+            font-weight: 800 !important;
+            line-height: 1.4 !important;
+        }
+
+        /* 4. 활성화된(선택된) 탭 강조 */
+        .stTabs [aria-selected="true"] * {
+            font-weight: 900 !important;
         }
     </style>
 """, unsafe_allow_html=True)
