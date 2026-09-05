@@ -10,33 +10,16 @@ st.set_page_config(page_title="통합 자산 관리 대시보드", layout="wide"
 # ====================================================
 st.markdown("""
     <style>
-        /* 1. 탭 바 전체 컨테이너 높이 및 갭 조절 */
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 12px !important;
-            padding-bottom: 8px !important;
-        }
-
-        /* 2. 탭 버튼 본체 크기 및 패딩 */
-        .stTabs [data-baseweb="tab"],
+        /* 상단 메인 탭 버튼 크기 및 글씨 키우기 */
         button[data-baseweb="tab"] {
-            font-size: 24px !important;
-            font-weight: 800 !important;
+            font-size: 18px !important;
+            font-weight: bold !important;
             padding: 12px 20px !important;
-            height: auto !important;
         }
-
-        /* 3. 탭 내부 모든 글자/이모지/태그 강제 확대 */
-        .stTabs [data-baseweb="tab"] *,
-        button[data-baseweb="tab"] *,
-        .stTabs [data-baseweb="tab-list"] button * {
-            font-size: 24px !important;
-            font-weight: 800 !important;
-            line-height: 1.4 !important;
-        }
-
-        /* 4. 활성화된(선택된) 탭 강조 */
-        .stTabs [aria-selected="true"] * {
-            font-weight: 900 !important;
+        /* 탭 내부 p 태그 폰트 크기 확대 */
+        button[data-baseweb="tab"] p {
+            font-size: 18px !important;
+            font-weight: bold !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -178,17 +161,14 @@ def display_chart(df):
     if df.empty: return
     chart_df = df.copy()
     
-    # 데이터 정제
     for col in ['투자원금', '현재잔고', '수익금액', '수익률']:
         chart_df[col] = chart_df[col].apply(clean_and_convert)
     
-    # 날짜 정렬
     chart_df['temp_dt'] = pd.to_datetime(chart_df['일자'], format='%Y/%m', errors='coerce')
     chart_df = chart_df.sort_values(by='temp_dt').reset_index(drop=True)
         
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     
-    # 💡 핵심 로직: 막대의 총 높이는 무조건 '현재잔고'가 되도록 두 조각으로 쪼갭니다.
     base_y = []
     top_y = []
     
@@ -196,9 +176,7 @@ def display_chart(df):
         bal = row['현재잔고']
         profit_abs = abs(row['수익금액'])
         
-        # 하단 녹색 기둥 높이 (잔고에서 손익 절댓값만큼 뺀 나머지)
         green_part = max(0, bal - profit_abs)
-        # 상단 색칠 기둥 높이 (손익 절댓값)
         color_part = min(bal, profit_abs)
         
         base_y.append(green_part)
@@ -208,18 +186,16 @@ def display_chart(df):
     fig.add_trace(go.Bar(
         x=chart_df['일자'], y=base_y, name="자산 베이스",
         marker_color='#26A69A', opacity=0.85, 
-        # 마우스를 올렸을 때는 조각난 숫자가 아닌 진짜 원금/잔고를 보여줍니다.
         customdata=chart_df[['투자원금', '현재잔고']].values,
         hovertemplate='<b>💵 투자원금</b>: %{customdata[0]:,.0f}원<br><b>✨ 현재잔고</b>: %{customdata[1]:,.0f}원<extra></extra>'
     ), secondary_y=False)
     
-    # 2. 상단 손익 막대 (수익은 빨강, 손실은 파랑)
+    # 2. 상단 손익 막대 (수익: 빨강, 손실: 파랑)
     profit_colors = ['#FF5252' if val > 0 else '#448AFF' if val < 0 else '#8E9297' for val in chart_df['수익금액']]
     
     fig.add_trace(go.Bar(
         x=chart_df['일자'], y=top_y, name="평가손익",
         marker_color=profit_colors, opacity=0.9,
-        # 마우스를 올렸을 때는 부호(+/-)가 포함된 진짜 수익금액을 보여줍니다.
         customdata=chart_df['수익금액'], 
         hovertemplate='<b>평가손익</b>: %{customdata:+,.0f}원<extra></extra>'
     ), secondary_y=False)
@@ -231,9 +207,8 @@ def display_chart(df):
         hovertemplate='<b>수익률</b>: %{y:.2f}%<extra></extra>'
     ), secondary_y=True)
     
-    # 레이아웃 업데이트
     fig.update_layout(
-        barmode='stack', # 두 조각을 쌓으면 총 높이가 딱 '현재잔고'가 완성됩니다!
+        barmode='stack',
         height=340, margin=dict(l=0, r=0, t=20, b=0),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
         hovermode="x unified",
@@ -242,8 +217,6 @@ def display_chart(df):
         xaxis=dict(type='category')
     )
     st.plotly_chart(fig, use_container_width=True)
-
-
 
 def parse_account(df, start_idx):
     if df is None: return pd.DataFrame(columns=['일자', '투자원금', '현재잔고', '수익금액', '수익률', '월수익'])
@@ -261,6 +234,30 @@ def parse_account(df, start_idx):
         sub_df['월수익'] = 0
     else:
         return pd.DataFrame(columns=['일자', '투자원금', '현재잔고', '수익금액', '수익률', '월수익'])
+        
+    sub_df['일자'] = sub_df['일자'].apply(format_date_str)
+    sub_df = sub_df[pd.notna(sub_df['일자']) & (sub_df['일자'] != '') & (sub_df['일자'].str.lower() != 'nan')].copy()
+    
+    sub_df['월수익'] = sub_df['월수익'].apply(clean_and_convert)
+    if sub_df['월수익'].sum() == 0:
+        profit_num = sub_df['수익금액'].apply(clean_and_convert)
+        sub_df['월수익'] = profit_num.diff().fillna(profit_num)
+        
+    return sub_df
+
+# 해외주식 전용 (달러 열 자동 건너뛰기)
+def parse_overseas_account(df, start_idx, has_dollar=False):
+    if df is None: return pd.DataFrame(columns=['일자', '투자원금', '현재잔고', '수익금액', '수익률', '월수익'])
+    total_cols = df.shape[1]
+    
+    if has_dollar:
+        if total_cols >= start_idx + 6:
+            sub_df = df[[0, start_idx, start_idx+2, start_idx+3, start_idx+4, start_idx+5]].copy()
+            sub_df.columns = ['일자', '투자원금', '현재잔고', '수익금액', '수익률', '월수익']
+        else:
+            return pd.DataFrame(columns=['일자', '투자원금', '현재잔고', '수익금액', '수익률', '월수익'])
+    else:
+        return parse_account(df, start_idx)
         
     sub_df['일자'] = sub_df['일자'].apply(format_date_str)
     sub_df = sub_df[pd.notna(sub_df['일자']) & (sub_df['일자'] != '') & (sub_df['일자'].str.lower() != 'nan')].copy()
@@ -317,7 +314,6 @@ def render_account_tab(sub_df, title):
             
     df_disp = df_disp.set_index('일자')
     
-    # 💡 수정된 부분: subset 리스트 마지막에 '월수익'을 추가했습니다!
     styled_tab_df = df_disp.style\
         .map(color_profit_loss, subset=['수익금액', '수익률', '월수익'])\
         .format({
@@ -355,6 +351,7 @@ data_pension = load_pure_data(URL_PENSION)
 
 account_dict = {}
 
+# 국내자산
 if data_dom1 is not None and data_dom2 is not None:
     account_dict["단기스윙"] = parse_account(data_dom1, 3)
     account_dict["단타연습"] = parse_account(data_dom1, 8)
@@ -366,23 +363,39 @@ if data_dom1 is not None and data_dom2 is not None:
 else:
     df_dom_total = None
 
+# 해외자산 (달러 열 건너뛰기 완벽 반영)
 if data_overseas is not None:
     num_cols = len(data_overseas.columns)
-    ovs_accs = [parse_account(data_overseas, 3)]
-    account_dict["토스증권"] = ovs_accs[0]
-    if num_cols > 8:
-        ovs_accs.append(parse_account(data_overseas, 8))
-        account_dict["SOXL Grid"] = ovs_accs[1]
-    if num_cols > 13:
-        ovs_accs.append(parse_account(data_overseas, 13))
-        account_dict["떨사오팔"] = ovs_accs[2]
-    if num_cols > 18:
-        ovs_accs.append(parse_account(data_overseas, 18))
-        account_dict["V3"] = ovs_accs[3]
+    ovs_accs = []
+    
+    # 1) 토스증권 (인덱스 3, 달러 없음)
+    acc_toss = parse_overseas_account(data_overseas, 3, has_dollar=False)
+    ovs_accs.append(acc_toss)
+    account_dict["토스증권"] = acc_toss
+    
+    # 2) SOXL Grid (인덱스 8, 달러 있음)
+    if num_cols >= 14:
+        acc_soxl = parse_overseas_account(data_overseas, 8, has_dollar=True)
+        ovs_accs.append(acc_soxl)
+        account_dict["SOXL Grid"] = acc_soxl
+        
+    # 3) 떨사오팔 (인덱스 14, 달러 있음)
+    if num_cols >= 20:
+        acc_ddul = parse_overseas_account(data_overseas, 14, has_dollar=True)
+        ovs_accs.append(acc_ddul)
+        account_dict["떨사오팔"] = acc_ddul
+        
+    # 4) V3 (인덱스 20, 달러 있음)
+    if num_cols >= 26:
+        acc_v3 = parse_overseas_account(data_overseas, 20, has_dollar=True)
+        ovs_accs.append(acc_v3)
+        account_dict["V3"] = acc_v3
+        
     df_ovs_total = calculate_total_df(ovs_accs)
 else:
     df_ovs_total = None
 
+# 코인자산
 if data_coin is not None:
     num_cols = len(data_coin.columns)
     coin_accs = [parse_account(data_coin, 3)]
@@ -397,6 +410,7 @@ if data_coin is not None:
 else:
     df_coin_total = None
 
+# 연금자산
 if data_pension is not None:
     num_cols = len(data_pension.columns)
     pen_accs = []
@@ -437,13 +451,11 @@ with top_tabs[0]:
         has_prev_row = len(data_clean) >= 2
         df_asset_prev = data_clean.iloc[1] if has_prev_row else df_asset_last
         
-        # 🌟 실제 시트 열 구조 반영: H=7(Gold), I~K=8~10(현금성), L~O=11~14(적금/예금/청약)
         val_gold = clean_and_convert(df_asset_last.iloc[7]) if len(df_asset_last) > 7 else 0
         val_cash = (clean_and_convert(df_asset_last.iloc[8]) + 
                     clean_and_convert(df_asset_last.iloc[9]) + 
                     clean_and_convert(df_asset_last.iloc[10])) if len(df_asset_last) > 10 else 0
         
-        # 8월 국민은행(13번) 빈칸은 자동 0원 처리
         val_savings = sum(clean_and_convert(df_asset_last.iloc[i]) for i in range(11, min(15, len(df_asset_last))))
         
         df_assets = pd.DataFrame()
@@ -458,7 +470,6 @@ with top_tabs[0]:
                                   data_clean.iloc[:, 9].map(clean_and_convert) + 
                                   data_clean.iloc[:, 10].map(clean_and_convert)) if data_clean.shape[1] > 10 else 0
         
-        # L~O열(11:15) 전체 합산
         if data_clean.shape[1] > 11:
             max_col = min(15, data_clean.shape[1])
             savings_sub = data_clean.iloc[:, 11:max_col].copy()
@@ -466,8 +477,7 @@ with top_tabs[0]:
         else:
             df_assets['적금/예금'] = 0
 
-        # 🌟 [국내주식, 해외주식, 코인, 연금] 개별 분리 매핑
-        # 1) 국내주식
+        # 자산군별 매핑
         if df_dom_total is not None and not df_dom_total.empty:
             temp_dom = df_dom_total[['일자', '현재잔고']].rename(columns={'현재잔고': '국내주식'})
             df_assets = pd.merge(df_assets, temp_dom, on='일자', how='left')
@@ -475,7 +485,6 @@ with top_tabs[0]:
         else:
             df_assets['국내주식'] = 0
 
-        # 2) 해외주식
         if df_ovs_total is not None and not df_ovs_total.empty:
             temp_ovs = df_ovs_total[['일자', '현재잔고']].rename(columns={'현재잔고': '해외주식'})
             df_assets = pd.merge(df_assets, temp_ovs, on='일자', how='left')
@@ -483,7 +492,6 @@ with top_tabs[0]:
         else:
             df_assets['해외주식'] = 0
 
-        # 3) 코인
         if df_coin_total is not None and not df_coin_total.empty:
             temp_coin = df_coin_total[['일자', '현재잔고']].rename(columns={'현재잔고': '코인'})
             df_assets = pd.merge(df_assets, temp_coin, on='일자', how='left')
@@ -491,7 +499,6 @@ with top_tabs[0]:
         else:
             df_assets['코인'] = 0
 
-        # 4) 연금
         if df_pension_total is not None and not df_pension_total.empty:
             temp_pen = df_pension_total[['일자', '현재잔고']].rename(columns={'현재잔고': '연금'})
             df_assets = pd.merge(df_assets, temp_pen, on='일자', how='left')
@@ -518,7 +525,13 @@ with top_tabs[0]:
     dom_inv2, dom_bal2 = get_latest_acc_vals(data_dom2, [3, 8])
     dom_inv, dom_bal = dom_inv1 + dom_inv2, dom_bal1 + dom_bal2
 
-    ovs_inv, ovs_bal = get_latest_acc_vals(data_overseas, [3, 8, 13, 18])
+    # 해외자산 원금 및 잔고 집계
+    if df_ovs_total is not None and len(ovs_accs) > 0:
+        ovs_inv = sum(clean_and_convert(acc.iloc[0]['투자원금']) for acc in ovs_accs if not acc.empty)
+        ovs_bal = sum(clean_and_convert(acc.iloc[0]['현재잔고']) for acc in ovs_accs if not acc.empty)
+    else:
+        ovs_inv, ovs_bal = 0, 0
+
     coin_inv, coin_bal = get_latest_acc_vals(data_coin, [3, 8])
     
     pen_inv, pen_bal = 0, 0
@@ -538,8 +551,6 @@ with top_tabs[0]:
 
     val_stock_coin, val_pension_bal = dom_bal + ovs_bal + coin_bal, pen_bal
     val_total_assets = val_stock_coin + val_pension_bal + val_savings + val_cash + val_gold
-    
-    # 🌟 연금 제외 총자산 (순수 투자 + 예적금 + 현금성 + Gold)
     val_total_assets_no_pension = val_stock_coin + val_savings + val_cash + val_gold
 
     prev_total_assets = clean_and_convert(df_asset_prev.iloc[3]) if has_prev_row else val_total_assets
@@ -575,9 +586,7 @@ with top_tabs[0]:
         elif rate < 0: return f"<span style='color: #448AFF; font-size: 12px; font-weight: bold;'>{rate}%</span>"
         return f"<span style='color: #8E9297; font-size: 12px; font-weight: bold;'>0.0%</span>"
 
-    # ====================================================
-    # 🌟 [1번째 줄] 총자산 현황(연금제외 추가) + 자산 비중(세분화) + 총자산 누적 막대 추이 그래프
-    # ====================================================
+    # 1번째 줄: 대시보드 메인 지표
     r1_col1, r1_col2, r1_col3 = st.columns([0.7, 1.0, 1.8])
 
     with r1_col1:
@@ -627,7 +636,6 @@ with top_tabs[0]:
         if not df_assets.empty:
             fig_line = make_subplots(specs=[[{"secondary_y": True}]])
 
-            # 🌟 [요청 반영] 아래에서부터 쌓이는 순서: 연금 -> 골드 -> 통장(현금성) -> 적금/예금 -> 코인 -> 해외주식 -> 국내주식
             asset_layers = [
                 ('연금', '#81C784'),
                 ('Gold', '#FBC02D'),
@@ -672,25 +680,13 @@ with top_tabs[0]:
                 xaxis=dict(type='category')
             )
             
-            fig_line.update_yaxes(
-                tickformat=",.0f",
-                ticksuffix="원",
-                secondary_y=False
-            )
-            
-            fig_line.update_yaxes(
-                tickformat=",.0f",
-                ticksuffix="원",
-                showgrid=False,
-                secondary_y=True
-            )
+            fig_line.update_yaxes(tickformat=",.0f", ticksuffix="원", secondary_y=False)
+            fig_line.update_yaxes(tickformat=",.0f", ticksuffix="원", showgrid=False, secondary_y=True)
             st.plotly_chart(fig_line, use_container_width=True)
 
     st.markdown("<hr style='border: 0; height: 1px; background: #2A2D32; margin: 25px 0;'>", unsafe_allow_html=True)
 
-    # ====================================================
-    # 🌟 [2번째 줄] 재테크 투자원금 + 현재금액 + 수익 현황 3카드
-    # ====================================================
+    # 2번째 줄: 투자원금, 현재금액, 수익 현황
     r2_col1, r2_col2, r2_col3 = st.columns(3)
 
     with r2_col1:
@@ -709,7 +705,7 @@ with top_tabs[0]:
                     <div style='font-size: 20px; font-weight: bold;'>{int(dom_inv):,}원</div>
                 </div>
                 <div style='margin-bottom: 12px;'>
-                    <div style='color: #FF8A80; font-size: 12px; font-weight: bold;'>해외주식 + 달러 RP</div>
+                    <div style='color: #FF8A80; font-size: 12px; font-weight: bold;'>해외주식</div>
                     <div style='font-size: 20px; font-weight: bold;'>{int(ovs_inv):,}원</div>
                 </div>
                 <div style='margin-bottom: 12px;'>
@@ -739,7 +735,7 @@ with top_tabs[0]:
                     <div style='font-size: 20px; font-weight: bold;'>{int(dom_bal):,}원</div>
                 </div>
                 <div style='margin-bottom: 12px;'>
-                    <div style='color: #FF8A80; font-size: 12px; font-weight: bold;'>해외 + RP</div>
+                    <div style='color: #FF8A80; font-size: 12px; font-weight: bold;'>해외주식</div>
                     <div style='font-size: 20px; font-weight: bold;'>{int(ovs_bal):,}원</div>
                 </div>
                 <div style='margin-bottom: 12px;'>
@@ -797,15 +793,11 @@ with top_tabs[0]:
 
     st.markdown("<hr style='border: 0; height: 1px; background: #2A2D32; margin: 25px 0;'>", unsafe_allow_html=True)
 
-    # ====================================================
-    # 🌟 [3번째 줄] 월별 자산 현황 & Event 기록 상세 표
-    # ====================================================
+    # 3번째 줄: 월별 자산 현황 & Event 기록 표
     if not df_assets.empty:
         st.markdown("<div style='font-size: 19px; font-weight: bold; color: #FFFFFF; margin-bottom: 15px;'><span style='color: #00E676;'>●</span> 월별 자산 현황 & Event 기록</div>", unsafe_allow_html=True)
         
         df_assets_table = df_assets.sort_values(by='일자', ascending=False).reset_index(drop=True)
-        
-        # 🌟 동일한 순서로 표 컬럼 정렬 (연금 -> Gold -> 통장(현금성) -> 적금/예금 -> 코인 -> 해외주식 -> 국내주식)
         df_assets_disp = df_assets_table[['일자', '총자산', '증감액', '증감율', 'Event', '연금', 'Gold', '통장(현금성)', '적금/예금', '코인', '해외주식', '국내주식']].copy().set_index('일자')
         
         def color_total_diff(val):
